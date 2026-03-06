@@ -142,7 +142,7 @@ export interface BooksResponse {
 }
 
 export async function getBooks(): Promise<Book[]> {
-  const response = await apiRequest<BooksResponse>("/api/catalog/books", {
+  const response = await apiRequest<BooksResponse>("/catalog/books", {
     method: "GET",
   });
 
@@ -150,7 +150,7 @@ export async function getBooks(): Promise<Book[]> {
 }
 
 export async function getBook(id: string): Promise<Book> {
-  return apiRequest<Book>(`/api/catalog/books/${id}`, {
+  return apiRequest<Book>(`/catalog/books/${id}`, {
     method: "GET",
   });
 }
@@ -158,7 +158,7 @@ export async function getBook(id: string): Promise<Book> {
 export async function createBook(
   book: Omit<Book, "id" | "createdAt" | "updatedAt">
 ): Promise<Book> {
-  return apiRequest<Book>("/api/catalog/books", {
+  return apiRequest<Book>("/catalog/books", {
     method: "POST",
     body: JSON.stringify(book),
   });
@@ -168,14 +168,14 @@ export async function updateBook(
   id: string,
   book: Partial<Book>
 ): Promise<Book> {
-  return apiRequest<Book>(`/api/catalog/books/${id}`, {
+  return apiRequest<Book>(`/catalog/books/${id}`, {
     method: "PUT",
     body: JSON.stringify(book),
   });
 }
 
 export async function deleteBook(id: string): Promise<void> {
-  return apiRequest<void>(`/api/catalog/books/${id}`, {
+  return apiRequest<void>(`/catalog/books/${id}`, {
     method: "DELETE",
   });
 }
@@ -192,7 +192,7 @@ export async function uploadMedia(file: File): Promise<string> {
   const token = getToken();
 
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("image", file);
 
   const headers: HeadersInit = {
     Accept: "application/json",

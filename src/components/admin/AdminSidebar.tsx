@@ -9,6 +9,8 @@ import {
   faClockRotateLeft,
   faChartLine,
   faRightFromBracket,
+  faCableCar,
+  faUser,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -23,6 +25,16 @@ const navItems = [
     label: "Edit Catalogs",
     href: "/admin/catalogs",
     icon: faBook,
+  },
+    {
+    label: "Edit Categories",
+    href: "/admin/categories",
+    icon: faCableCar,
+  },
+    {
+    label: "Edit Authors",
+    href: "/admin/authors",
+    icon: faUser,
   },
   {
     label: "Order History",
