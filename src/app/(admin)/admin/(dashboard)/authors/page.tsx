@@ -1,180 +1,263 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faPlus,
-  faPen,
-  faTrash,
-  faSearch,
-  faSpinner,
-  faTimes,
-} from "@fortawesome/free-solid-svg-icons";
+import { faPen, faTrash, faSpinner } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "sonner";
 import {
-  getBooks,
-  createBook,
-  deleteBook,
   uploadMedia,
-  type Book,
   ApiError,
+  createAuthor,
+  getAuthors,
+  AuthorModel,
+  deleteAuthor,
 } from "@/lib/api-client";
-import { faCloudUploadAlt } from "@fortawesome/free-solid-svg-icons";
-interface Author {
-  id: string;
+import { useFetch } from "@/hooks/use-fetch";
+import { SingleValue } from "react-select";
+import CountryDropDown, { CountryOption } from "@/components/common/country-dropdown";
+import PageHeader from "@/components/common/page-header";
+import SearchBar from "@/components/common/search-bar";
+import AdminModal from "@/components/common/admin-modal";
+import ImageUploadField from "@/components/common/image-upload-field";
+
+interface AuthorFormData {
   name: string;
   bio: string;
-  nationality: string;
-  birthDate: string;
-  photoUrl: string;
-  email: string;
-  books: string[];
+  birthdate: string;
 }
 
-const authors: Author[] = [
-  {
-    id: "1",
-    name: "George Orwell",
-    bio: "English novelist known for his sharp critique of totalitarianism.",
-    nationality: "British",
-    birthDate: "1903-06-25",
-    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/7/7e/George_Orwell_press_photo.jpg",
-    email: "george.orwell@example.com",
-    books: ["1984", "Animal Farm", "Homage to Catalonia", "Keep the Aspidistra Flying"],
-  },
-  {
-    id: "2",
-    name: "J.K. Rowling",
-    bio: "British author best known for the Harry Potter fantasy series.",
-    nationality: "British",
-    birthDate: "1965-07-31",
-    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/5/5d/J._K._Rowling_2010.jpg",
-    email: "jk.rowling@example.com",
-    books: ["Harry Potter and the Philosopher's Stone", "Harry Potter and the Chamber of Secrets", "The Casual Vacancy", "The Ickabog"],
-  },
-  {
-    id: "3",
-    name: "Haruki Murakami",
-    bio: "Japanese writer whose works have garnered a large international following.",
-    nationality: "Japanese",
-    birthDate: "1949-01-12",
-    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/8/80/Murakami_Haruki_%282009%29.jpg",
-    email: "h.murakami@example.com",
-    books: ["Norwegian Wood", "Kafka on the Shore", "1Q84", "The Wind-Up Bird Chronicle"],
-  },
-  {
-    id: "4",
-    name: "Toni Morrison",
-    bio: "American novelist and first African-American woman to receive the Nobel Prize in Literature.",
-    nationality: "American",
-    birthDate: "1931-02-18",
-    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/0/04/Toni_Morrison_2008-2.jpg",
-    email: "toni.morrison@example.com",
-    books: ["Beloved", "Song of Solomon", "The Bluest Eye", "Sula"],
-  },
-  {
-    id: "5",
-    name: "Gabriel García Márquez",
-    bio: "Colombian novelist and Nobel Prize laureate, pioneer of magical realism.",
-    nationality: "Colombian",
-    birthDate: "1927-03-06",
-    photoUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Gabriel_Garcia_Marquez.jpg",
-    email: "gg.marquez@example.com",
-    books: ["One Hundred Years of Solitude", "Love in the Time of Cholera", "The General in His Labyrinth", "Chronicle of a Death Foretold"],
-  },
-]
+const initialFormData: AuthorFormData = { name: "", bio: "", birthdate: "" };
 
-export default function AuthorsPage(){
+const INPUT_CLS =
+  "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800";
+
+export default function AuthorsPage() {
+  const { data: authors, loading, error, refetch: fetchAuthors } = useFetch<AuthorModel[]>(
+    getAuthors,
+    "Failed to fetch authors. Please try again."
+  );
   const [searchTerm, setSearchTerm] = useState("");
-    
-    return <div className="space-y-6">
-        <div className=" flex items-center justify-between">
-            <div>
-            <h2 className="text-2xl font-bold text-gray-800">Edit Authors</h2>
-             <p className="text-gray-500 mt-1">Manage your authors</p>
-             </div>
-            <button className="flex items-center bg-blue-600 text-white gap-2 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-          Add New Author    
-            </button>
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formData, setFormData] = useState<AuthorFormData>(initialFormData);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [nationality, setNationality] = useState<SingleValue<CountryOption>>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setCoverPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setCoverFile(null);
+    setCoverPreview(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      let profileUrl = "";
+      if (coverFile) {
+        setUploading(true);
+        try {
+          profileUrl = await uploadMedia(coverFile);
+          toast.success("Image uploaded successfully!");
+        } catch (err) {
+          toast.error(err instanceof ApiError ? `Upload failed: ${err.message}` : "Failed to upload image.");
+          setSubmitting(false);
+          setUploading(false);
+          return;
+        }
+        setUploading(false);
+      }
+      if (!profileUrl) {
+        toast.error("Please upload a photo");
+        setSubmitting(false);
+        return;
+      }
+      await createAuthor({
+        name: formData.name,
+        bio: formData.bio,
+        profileUrl,
+        nationality: nationality?.value ?? "",
+        dob: formData.birthdate,
+      });
+      toast.success("Author added successfully!");
+      setShowAddModal(false);
+      setFormData(initialFormData);
+      setNationality(null);
+      setCoverFile(null);
+      setCoverPreview(null);
+      fetchAuthors();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to add author. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this author?")) return;
+    setDeleting(id);
+    try {
+      await deleteAuthor(id);
+      toast.success("Author deleted successfully!");
+      fetchAuthors();
+    } catch {
+      toast.error("Failed to delete author.");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const filteredAuthors = (authors ?? []).filter((a) =>
+    a.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Edit Authors"
+        subtitle="Manage your authors"
+        actionLabel="Add New Author"
+        onAction={() => setShowAddModal(true)}
+      />
+
+      <SearchBar
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder="Search authors by name..."
+      />
+
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          {error}
+          <button onClick={fetchAuthors} className="ml-4 text-red-800 underline hover:no-underline">
+            Retry
+          </button>
         </div>
-        {/*Search Bar*/}
-        
-        <div className="bg-white rounded-lg shadow p-4">
-           <div className="relative">
-            <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Search Authors...." value={searchTerm} onChange={(e)=>{
-                setSearchTerm(e.target.value);
-            }} 
-            className=" w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-111111"/>
-           </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <FontAwesomeIcon icon={faSpinner} className="w-8 h-8 text-blue-600 animate-spin" />
+          <span className="ml-3 text-gray-600">Loading authors...</span>
         </div>
-        {/*Authors Table*/}
-        <div>
-            <table className ="w-full">
-                <thead className="bg-gray-50">
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Bio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Books
-                </th>
-              
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                    {
-                        authors.map((author)=>{
-                           return (
-                            <tr key ={author.id} className="hover:bg-gray-50">
-                                <td className="px-6 pb-2 pt-4 text-black">
-                                   <div className="flex flex-col gap-2 ">
-                                    <img src={author.photoUrl} className="w-14 h-18 object-cover rounded"/>
-                                     <h6>{author.name}</h6>
-                                   </div>
-                                </td>
-                                 <td>
-                                <p className="text-gray-800">{author.bio}</p>
-                            </td>
-                              <td>
-                                <p className="text-gray-800"> {author.books.slice(0, -1).join(', ') + 
-   (author.books.length > 1 ? ' and ' : '') + 
-   author.books.slice(-1)}</p>
-                            </td>
-                             <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                          <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
-                        </button>
-                        <button
-                          
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {1==1 ? (
-                            <FontAwesomeIcon
-                              icon={faSpinner}
-                              className="w-4 h-4 animate-spin"
-                            />
-                          ) : (
-                            <FontAwesomeIcon
-                              icon={faTrash}
-                              className="w-4 h-4"
-                            />
-                          )}
-                        </button>
+      )}
+
+      {!loading && !error && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                {["Author", "Bio", "Nationality", "Actions"].map((h) => (
+                  <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredAuthors.map((author) => (
+                <tr key={author.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {author.profileUrl && (
+                        <img
+                          src={author.profileUrl}
+                          alt={author.name}
+                          className="w-10 h-10 object-cover rounded-full"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                        />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{author.name}</p>
                       </div>
-                    </td>
-                            </tr>
-                           
-                           ) 
-                        })
-                    }
-                </tbody>
-            </table>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">{author.bio}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{author.nationality}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <FontAwesomeIcon icon={faPen} className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => author.id && handleDelete(author.id)}
+                        disabled={deleting === author.id}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <FontAwesomeIcon
+                          icon={deleting === author.id ? faSpinner : faTrash}
+                          className={`w-4 h-4 ${deleting === author.id ? "animate-spin" : ""}`}
+                        />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredAuthors.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                    No authors found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+      )}
 
+      {showAddModal && (
+        <AdminModal
+          title="Add New Author"
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          submitLabel="Add Author"
+        >
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Author&apos;s Name *</label>
+            <input
+              type="text" name="name" value={formData.name} onChange={handleInputChange}
+              required placeholder="Enter author name" className={INPUT_CLS}
+            />
+          </div>
 
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Bio *</label>
+            <textarea
+              name="bio" value={formData.bio} onChange={handleInputChange}
+              required rows={3} placeholder="Enter bio" className={INPUT_CLS}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nationality *</label>
+            <CountryDropDown value={nationality} onChange={setNationality} />
+          </div>
+
+          <ImageUploadField
+            label="Author Photo *"
+            preview={coverPreview}
+            onFileChange={handleFileChange}
+            onRemove={handleRemoveImage}
+            uploading={uploading}
+          />
+        </AdminModal>
+      )}
     </div>
+  );
 }

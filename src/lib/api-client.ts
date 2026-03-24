@@ -1,3 +1,5 @@
+import { Author } from "next/dist/lib/metadata/types/metadata-types";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3009";
 const AUTH_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost/admin";
@@ -118,6 +120,11 @@ export async function logout(): Promise<void> {
 }
 
 // Books API
+interface BookAuthors{
+  id:string, 
+  name:string,
+  order:number
+}
 export interface Book {
   id?: string;
   title: string;
@@ -132,21 +139,36 @@ export interface Book {
   stockQuantity: number;
   createdAt?: string;
   updatedAt?: string;
+  authors?:BookAuthors[]
+  authorIds?:string[]
 }
 
 export interface BooksResponse {
   books?: Book[];
-  total?: number;
-  page?: number;
-  limit?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
 }
 
-export async function getBooks(): Promise<Book[]> {
-  const response = await apiRequest<BooksResponse>("/catalog/books", {
+export async function getBooks(page?:number, limit?:number , search?: string): Promise<BooksResponse> {
+ 
+  const searchParams = new URLSearchParams();
+  if (search) searchParams.set("search", search);
+  if (page !== undefined) searchParams.set("page", String(page));
+  if (limit !== undefined) searchParams.set("limit", String(limit));
+
+  const qs = searchParams.toString();
+
+  const response = await apiRequest<BooksResponse>(`/catalog/books${qs ? `?${qs}` : ""}`, {
     method: "GET",
   });
 
-  return response.books || [];
+  return response || [];
 }
 
 export async function getBook(id: string): Promise<Book> {
@@ -179,6 +201,57 @@ export async function deleteBook(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+export interface AuthorModel{
+  id?: string; 
+  name: string;
+  bio:string; 
+  dob:string;
+  profileUrl:string;
+  nationality:string;
+  // bookAuthors:[];
+  createdAt?: string; 
+  updatedAt?:string;
+}
+//Manage Authors 
+export async function createAuthor(author:Omit<AuthorModel,"id">):Promise<AuthorModel>{
+  return apiRequest<AuthorModel>("/catalog/authors",{
+    method: "POST",
+    body:JSON.stringify(author)
+  });
+}
+
+export interface AuthorResponse {
+  authors?: AuthorModel[];
+  total?: number;
+  page?: number;
+  limit?: number;
+}
+
+export async function getAuthors(params?: {
+  query?: string;
+  page?: number;
+  limit?: number;
+}): Promise<AuthorModel[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.query) searchParams.set("search", params.query);
+  if (params?.page !== undefined) searchParams.set("page", String(params.page));
+  if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
+
+  const qs = searchParams.toString();
+  const response = await apiRequest<AuthorResponse>(
+    `/catalog/authors${qs ? `?${qs}` : ""}`,
+    { method: "GET" }
+  );
+
+  return response.authors || [];
+}
+export async function deleteAuthor(authorId:String):Promise<void>{
+  const response = await apiRequest<void> (`/catalog/authors/${authorId}`,{
+    method:"DELETE"
+  });
+  return;
+}
+
 
 // Media API
 export interface MediaUploadResponse {
